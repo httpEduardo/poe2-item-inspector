@@ -1,0 +1,36 @@
+<Window x:Class="PoE2Inspector.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PoE2 Inspector" 
+        Height="180" 
+        Width="400"
+        WindowStyle="ToolWindow"
+        ResizeMode="NoResize"
+        Topmost="False"
+        ShowInTaskbar="True">
+    <Grid Background="#FF1E1E2E">
+        <StackPanel Margin="20" VerticalAlignment="Center">
+            <TextBlock Text="PoE2 Item Inspector" 
+                       FontSize="20" 
+                       FontWeight="Bold" 
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,20"/>
+
+            <TextBlock Text="Pressione Alt+E sobre um item no PoE2" 
+                       FontSize="14" 
+                       Foreground="LightGray"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       Margin="0,0,0,10"/>
+
+            <TextBlock x:Name="StatusText" 
+                       Text="Status: Executando" 
+                       FontSize="12" 
+                       Foreground="LightGreen"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,20"/>
+        </StackPanel>
+    </Grid>
+</Window>
