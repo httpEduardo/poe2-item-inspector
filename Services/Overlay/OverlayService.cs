@@ -85,7 +85,7 @@ public class OverlayService : IOverlayService
         }
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        exStyle |= WS_EX_LAYERED | WS_EX_TRANSPARENT;
+        exStyle |= WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
         SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
         _log.Info("Overlay window made click-through");
     }
@@ -101,6 +101,7 @@ public class OverlayService : IOverlayService
 
         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         exStyle &= ~WS_EX_TRANSPARENT; 
+        exStyle |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
         SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
         _log.Info("Overlay window made interactive");
     }
@@ -124,6 +125,8 @@ public class OverlayService : IOverlayService
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_LAYERED = 0x80000;
     private const int WS_EX_TRANSPARENT = 0x20;
+    private const int WS_EX_NOACTIVATE = 0x08000000;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
 
     #endregion
 }

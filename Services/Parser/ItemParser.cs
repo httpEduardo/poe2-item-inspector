@@ -21,64 +21,168 @@ public class ItemParser : IItemParser
         try
         {
             var item = new Item { RawText = rawText };
-            var lines = rawText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-
-            var section = ParseSection.Header;
-            var currentModType = ModType.Implicit;
-
+            
+            // Limpar o texto e separar por linhas
+            var cleanText = rawText.Trim();
+            var lines = cleanText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            
+            _log.Info($"Parsing item with {lines.Length} lines");
+            
+            // Primeiro, vamos encontrar as seções separadas por "--------"
+            var sections = new List<List<string>>();
+            var currentSection = new List<string>();
+            
             foreach (var line in lines)
             {
-
                 if (line.StartsWith("--------"))
                 {
-                    section = NextSection(section, ref currentModType);
-                    continue;
+                    if (currentSection.Count > 0)
+                    {
+                        sections.Add(currentSection);
+                        currentSection = new List<string>();
+                    }
                 }
-
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                switch (section)
+                else if (!string.IsNullOrWhiteSpace(line))
                 {
-                    case ParseSection.Header:
-                        ParseHeader(line, item);
-                        break;
-                    case ParseSection.Properties:
-                        ParseProperty(line, item);
-                        break;
-                    case ParseSection.Requirements:
-                        ParseRequirement(line, item);
-                        break;
-                    case ParseSection.Mods:
-                        ParseMod(line, item, currentModType);
-                        break;
+                    currentSection.Add(line.Trim());
                 }
             }
-
-            _log.Info($"Parsed item: {item.Name} ({item.BaseType})");
+            
+            if (currentSection.Count > 0)
+                sections.Add(currentSection);
+            
+            _log.Info($"Found {sections.Count} sections");
+            
+            // Processar seções
+            if (sections.Count > 0)
+            {
+                ParseHeaderSection(sections[0], item);
+            }
+            
+            // Procurar Item Level e processar outras seções
+            bool foundImplicits = false;
+            for (int i = 1; i < sections.Count; i++)
+            {
+                var section = sections[i];
+                
+                foreach (var line in section)
+                {
+                    // Item Level
+                    if (line.StartsWith("Item Level:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var match = Regex.Match(line, @"Item Level:\s*(\d+)");
+                        if (match.Success && int.TryParse(match.Groups[1].Value, out var ilvl))
+                        {
+                            item.ItemLevel = ilvl;
+                        }
+                        continue;
+                    }
+                    
+                    // Requirements
+                    if (line.StartsWith("Requirements:", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (line.StartsWith("Level:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var match = Regex.Match(line, @"Level:\s*(\d+)");
+                        if (match.Success && int.TryParse(match.Groups[1].Value, out var lvl))
+                            item.RequiredLevel = lvl;
+                        continue;
+                    }
+                    
+                    // Properties com valores
+                    if (line.Contains(":") && !IsModLine(line))
+                    {
+                        ParseProperty(line, item);
+                        continue;
+                    }
+                    
+                    // Mods - detectar se é implicit ou explicit
+                    if (IsModLine(line))
+                    {
+                        var mod = new ModLine
+                        {
+                            RawText = line,
+                            Type = foundImplicits ? ModType.Explicit : ModType.Implicit
+                        };
+                        
+                        var numbers = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?")
+                            .Cast<Match>()
+                            .Select(m => double.Parse(m.Value))
+                            .ToArray();
+                        mod.Values = numbers;
+                        
+                        // Se encontrar "(implicit)" na linha ou seção anterior teve separador
+                        if (line.Contains("(implicit)") || !foundImplicits)
+                        {
+                            item.ImplicitMods.Add(mod);
+                        }
+                        else
+                        {
+                            item.ExplicitMods.Add(mod);
+                        }
+                    }
+                }
+                
+                // Após primeira seção de mods, próximas são explicits
+                if (section.Any(l => IsModLine(l)))
+                    foundImplicits = true;
+            }
+            
+            _log.Info($"Parsed item: Name='{item.Name}', Base='{item.BaseType}', Rarity='{item.Rarity}'");
+            _log.Info($"Implicits: {item.ImplicitMods.Count}, Explicits: {item.ExplicitMods.Count}");
+            
             return item;
         }
         catch (Exception ex)
         {
-            _log.Error($"Error parsing item text", ex);
-            return new Item { RawText = rawText, Name = "Parse Error" };
+            _log.Error($"Error parsing item text: {ex.Message}", ex);
+            return new Item { RawText = rawText, Name = "Parse Error", BaseType = "Unknown" };
         }
     }
-
-    private void ParseHeader(string line, Item item)
+    
+    private void ParseHeaderSection(List<string> headerLines, Item item)
     {
-        if (line.StartsWith("Rarity:", StringComparison.OrdinalIgnoreCase))
+        foreach (var line in headerLines)
         {
-            item.Rarity = line.Substring(8).Trim();
+            // Ignorar Item Class
+            if (line.StartsWith("Item Class:", StringComparison.OrdinalIgnoreCase))
+                continue;
+            
+            // Rarity
+            if (line.StartsWith("Rarity:", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Rarity = line.Substring(8).Trim();
+                continue;
+            }
+            
+            // Nome e Base Type
+            if (string.IsNullOrEmpty(item.Name))
+            {
+                item.Name = line;
+            }
+            else if (string.IsNullOrEmpty(item.BaseType))
+            {
+                item.BaseType = line;
+            }
         }
-        else if (string.IsNullOrEmpty(item.Name))
+        
+        // Se só tem nome, usar como base type também
+        if (!string.IsNullOrEmpty(item.Name) && string.IsNullOrEmpty(item.BaseType))
         {
-            item.Name = line.Trim();
+            item.BaseType = item.Name;
         }
-        else if (string.IsNullOrEmpty(item.BaseType))
-        {
-            item.BaseType = line.Trim();
-        }
+    }
+    
+    private bool IsModLine(string line)
+    {
+        // Mods geralmente têm números com + ou % ou palavras específicas
+        if (Regex.IsMatch(line, @"[+-]\d+%?"))
+            return true;
+        if (line.Contains("increased") || line.Contains("reduced") || 
+            line.Contains("added") || line.Contains("to ") ||
+            line.Contains("Adds ") || line.Contains("Grants "))
+            return true;
+        return false;
     }
 
     private void ParseProperty(string line, Item item)
@@ -89,113 +193,13 @@ public class ItemParser : IItemParser
             var label = line.Substring(0, colonIndex).Trim();
             var value = line.Substring(colonIndex + 1).Trim();
 
-            if (label.Equals("Item Level", StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(value, out var ilvl))
-                {
-                    item.ItemLevel = ilvl;
-                }
-            }
-
             if (label.Equals("Sockets", StringComparison.OrdinalIgnoreCase))
             {
-
                 var socketCount = value.Count(c => !char.IsWhiteSpace(c) && c != '-');
-                _log.Info($"Sockets conversion: '{value}' -> {socketCount}");
                 value = socketCount.ToString();
             }
 
             item.Properties.Add(new StatLine { Label = label, Value = value });
         }
-    }
-
-    private void ParseRequirement(string line, Item item)
-    {
-        var colonIndex = line.IndexOf(':');
-        if (colonIndex > 0)
-        {
-            var label = line.Substring(0, colonIndex).Trim();
-            var value = line.Substring(colonIndex + 1).Trim();
-
-            if (label.Equals("Level", StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(value, out var level))
-                {
-                    item.RequiredLevel = level;
-                }
-            }
-
-            item.Requirements.Add(new StatLine { Label = label, Value = value });
-        }
-    }
-
-    private void ParseMod(string line, Item item, ModType modType)
-    {
-        var mod = new ModLine
-        {
-            Type = modType,
-            RawText = line.Trim()
-        };
-
-        var numbers = Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?")
-            .Cast<Match>()
-            .Select(m => double.Parse(m.Value))
-            .ToArray();
-
-        mod.Values = numbers;
-
-        var template = line;
-        foreach (var match in Regex.Matches(line, @"[-+]?\d+(?:\.\d+)?").Cast<Match>().Reverse())
-        {
-            template = template.Remove(match.Index, match.Length).Insert(match.Index, "#");
-        }
-        mod.Template = template;
-
-        switch (modType)
-        {
-            case ModType.Implicit:
-                item.ImplicitMods.Add(mod);
-                break;
-            case ModType.Explicit:
-                item.ExplicitMods.Add(mod);
-                break;
-            case ModType.Enchant:
-                item.EnchantMods.Add(mod);
-                break;
-            default:
-                item.OtherMods.Add(mod);
-                break;
-        }
-    }
-
-    private ParseSection NextSection(ParseSection current, ref ModType currentModType)
-    {
-        switch (current)
-        {
-            case ParseSection.Header:
-                return ParseSection.Properties;
-            case ParseSection.Properties:
-                return ParseSection.Requirements;
-            case ParseSection.Requirements:
-                currentModType = ModType.Implicit;
-                return ParseSection.Mods;
-            case ParseSection.Mods:
-
-                if (currentModType == ModType.Implicit)
-                {
-                    currentModType = ModType.Explicit;
-                }
-                return ParseSection.Mods;
-            default:
-                return current;
-        }
-    }
-
-    private enum ParseSection
-    {
-        Header,
-        Properties,
-        Requirements,
-        Mods
     }
 }

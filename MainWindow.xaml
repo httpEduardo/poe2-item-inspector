@@ -1,36 +1,699 @@
 <Window x:Class="PoE2Inspector.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="PoE2 Inspector" 
-        Height="180" 
-        Width="400"
-        WindowStyle="ToolWindow"
-        ResizeMode="NoResize"
-        Topmost="False"
-        ShowInTaskbar="True">
-    <Grid Background="#FF1E1E2E">
-        <StackPanel Margin="20" VerticalAlignment="Center">
-            <TextBlock Text="PoE2 Item Inspector" 
-                       FontSize="20" 
-                       FontWeight="Bold" 
-                       Foreground="White"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,20"/>
-
-            <TextBlock Text="Pressione Alt+E sobre um item no PoE2" 
-                       FontSize="14" 
-                       Foreground="LightGray"
-                       HorizontalAlignment="Center"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center"
-                       Margin="0,0,0,10"/>
-
-            <TextBlock x:Name="StatusText" 
-                       Text="Status: Executando" 
-                       FontSize="12" 
-                       Foreground="LightGreen"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,20"/>
-        </StackPanel>
+        Title="⚔️ PoE2 Item Inspector" 
+        Height="750" Width="1100"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True"
+        Background="#1a1a2e">
+    
+    <Window.Resources>
+        <!-- Estilos para tema escuro customizável -->
+        <SolidColorBrush x:Key="PrimaryColor" Color="#e94560"/>
+        <SolidColorBrush x:Key="SecondaryColor" Color="#16213e"/>
+        <SolidColorBrush x:Key="BackgroundColor" Color="#1a1a2e"/>
+        <SolidColorBrush x:Key="CardColor" Color="#0f3460"/>
+        <SolidColorBrush x:Key="TextColor" Color="#eaeaea"/>
+        <SolidColorBrush x:Key="AccentColor" Color="#ffd700"/>
+        
+        <Style TargetType="Button" x:Key="PrimaryButton">
+            <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#ff6b6b"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        
+        <Style TargetType="Button" x:Key="SecondaryButton">
+            <Setter Property="Background" Value="{StaticResource CardColor}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        
+        <Style TargetType="TextBox" x:Key="DarkTextBox">
+            <Setter Property="Background" Value="#0a0a15"/>
+            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CardColor}"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+        </Style>
+        
+        <Style TargetType="ComboBox" x:Key="DarkComboBox">
+            <Setter Property="Background" Value="{StaticResource CardColor}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+        
+        <Style TargetType="TabItem" x:Key="ModernTab">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- HEADER -->
+        <Border Grid.Row="0" Background="{StaticResource SecondaryColor}" Padding="15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="⚔️ PoE2 Item Inspector" FontSize="22" FontWeight="Bold" 
+                               Foreground="{StaticResource AccentColor}" VerticalAlignment="Center"/>
+                    <TextBlock Text="v2.0 - Noob Friendly Edition" FontSize="11" 
+                               Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="💰 Moeda:" Foreground="{StaticResource TextColor}" 
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="CmbCurrency" Width="100" SelectionChanged="CmbCurrency_SelectionChanged">
+                        <ComboBoxItem Content="Chaos" Tag="chaos" IsSelected="True"/>
+                        <ComboBoxItem Content="Exalted" Tag="exalted"/>
+                        <ComboBoxItem Content="Divine" Tag="divine"/>
+                    </ComboBox>
+                    
+                    <TextBlock Text="🌍 Liga:" Foreground="{StaticResource TextColor}" 
+                               VerticalAlignment="Center" Margin="20,0,8,0"/>
+                    <ComboBox x:Name="CmbLeague" Width="150" SelectionChanged="CmbLeague_SelectionChanged">
+                        <ComboBoxItem Content="Rise of the Abyssal" IsSelected="True"/>
+                        <ComboBoxItem Content="HC Rise of the Abyssal"/>
+                        <ComboBoxItem Content="Standard"/>
+                        <ComboBoxItem Content="Hardcore"/>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- MAIN CONTENT -->
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" Margin="10">
+            
+            <!-- TAB 1: AVALIAR ITEM -->
+            <TabItem Header="🎯 Avaliar Item" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Lado Esquerdo: Input -->
+                    <Border Grid.Column="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="0,0,5,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="📋 COLE SEU ITEM AQUI" FontSize="16" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,5"/>
+                            
+                            <Border Grid.Row="1" Background="#2a2a4a" CornerRadius="5" Padding="10" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="💡 COMO USAR:" Foreground="{StaticResource PrimaryColor}" FontWeight="Bold"/>
+                                    <TextBlock Text="1️⃣ No jogo, passe o mouse sobre o item" Foreground="LightGray" FontSize="11"/>
+                                    <TextBlock Text="2️⃣ Pressione Ctrl+C para copiar" Foreground="LightGray" FontSize="11"/>
+                                    <TextBlock Text="3️⃣ Clique em 'Colar e Avaliar' ou Ctrl+V aqui" Foreground="LightGray" FontSize="11"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <TextBox Grid.Row="2" x:Name="TxtItemInput" Style="{StaticResource DarkTextBox}"
+                                     AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="Cole o texto do item aqui (Ctrl+C no jogo sobre o item)..."/>
+                            
+                            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="📋 Colar e Avaliar" Style="{StaticResource PrimaryButton}" 
+                                        Click="BtnPaste_Click" Margin="0,0,10,0"/>
+                                <Button Content="🔍 Avaliar" Style="{StaticResource SecondaryButton}" 
+                                        Click="BtnEvaluate_Click" Margin="0,0,10,0"/>
+                                <Button Content="🗑️ Limpar" Style="{StaticResource SecondaryButton}" 
+                                        Click="BtnClear_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Lado Direito: Resultados -->
+                    <Border Grid.Column="1" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="5,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="📊 RESULTADO DA AVALIAÇÃO" FontSize="16" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                            
+                            <TextBox Grid.Row="1" x:Name="TxtResult" Style="{StaticResource DarkTextBox}"
+                                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="Aguardando item para avaliar..."/>
+                            
+                            <!-- Resumo do Preço -->
+                            <Border Grid.Row="2" Background="#1a3a5a" CornerRadius="8" Padding="15" Margin="0,10,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Text="💰 PREÇO SUGERIDO" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" FontSize="14"/>
+                                    
+                                    <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                        <TextBlock x:Name="TxtPriceSummary" Text="--" FontSize="28" FontWeight="Bold" 
+                                                   Foreground="{StaticResource AccentColor}"/>
+                                        <TextBlock x:Name="TxtPriceDetail" Text="Avalie um item para ver o preço" 
+                                                   Foreground="LightGray" FontSize="11"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 2: MERCADO (MAIS AMIGÁVEL) -->
+            <TabItem Header="🏪 Mercado" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Explicação -->
+                    <Border Grid.Row="0" Background="#2a4a6a" CornerRadius="8" Padding="15" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="📖 O QUE É ISSO?" FontSize="16" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,8"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextColor}" FontSize="12">
+                                <Run Text="Esta lista mostra "/>
+                                <Run Text="OUTROS JOGADORES" FontWeight="Bold" Foreground="{StaticResource PrimaryColor}"/>
+                                <Run Text=" vendendo itens PARECIDOS com o seu no mercado."/>
+                            </TextBlock>
+                            <TextBlock TextWrapping="Wrap" Foreground="LightGray" FontSize="11" Margin="0,5,0,0">
+                                • O preço mostrado é quanto o vendedor está PEDINDO pelo item
+                                • "Original" mostra a moeda original que o vendedor escolheu
+                                • Use esses preços como REFERÊNCIA para precificar o seu item
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Lista de Itens -->
+                        <Border Grid.Column="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="10" Margin="0,0,5,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                
+                                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                    <TextBlock Text="🛒 ITENS À VENDA NO MERCADO" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}"/>
+                                    <TextBlock x:Name="TxtMarketCount" Text="(Avalie um item para ver)" 
+                                               Foreground="Gray" FontSize="11"/>
+                                </StackPanel>
+                                
+                                <TextBox Grid.Row="1" x:Name="TxtTradeListings" Style="{StaticResource DarkTextBox}"
+                                         IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         Text="As listagens do mercado aparecerão aqui após avaliar um item..."/>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Análise de Preços -->
+                        <Border Grid.Column="1" Background="{StaticResource CardColor}" CornerRadius="8" Padding="10" Margin="5,0,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                
+                                <TextBlock Grid.Row="0" Text="📈 ANÁLISE DE PREÇOS" FontWeight="Bold" 
+                                           Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                                
+                                <TextBox Grid.Row="1" x:Name="TxtPriceRange" Style="{StaticResource DarkTextBox}"
+                                         IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         Text="A análise de preços aparecerá aqui..."/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 3: CALCULADORA -->
+            <TabItem Header="🧮 Calculadora" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Input da Calculadora -->
+                    <Border Grid.Column="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="20" Margin="0,0,5,0">
+                        <StackPanel>
+                            <TextBlock Text="🎯 CALCULE SUA CHANCE DE VENDA" FontSize="16" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,15"/>
+                            
+                            <Border Background="#2a4a6a" CornerRadius="5" Padding="10" Margin="0,0,0,15">
+                                <TextBlock TextWrapping="Wrap" Foreground="LightGray" FontSize="11">
+                                    💡 Digite o preço que você quer vender seu item e descubra 
+                                    as chances dele ser vendido baseado nos preços do mercado!
+                                </TextBlock>
+                            </Border>
+                            
+                            <TextBlock x:Name="TxtCalcCurrencyLabel" Text="💵 Seu preço desejado:" 
+                                       Foreground="{StaticResource TextColor}" Margin="0,0,0,8"/>
+                            <TextBox x:Name="TxtMyPrice" Style="{StaticResource DarkTextBox}" 
+                                     FontSize="24" TextAlignment="Center" Margin="0,0,0,15"/>
+                            
+                            <Button Content="📊 CALCULAR CHANCE DE VENDA" Style="{StaticResource PrimaryButton}"
+                                    Click="BtnCalculateSellChance_Click" HorizontalAlignment="Stretch" FontSize="14"/>
+                            
+                            <!-- Resultado Visual -->
+                            <Border Background="#1a3a5a" CornerRadius="8" Padding="20" Margin="0,20,0,0">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="CHANCE DE VENDA" Foreground="Gray" FontSize="12" 
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtSellChance" Text="--%"  FontSize="48" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" HorizontalAlignment="Center"/>
+                                    <ProgressBar x:Name="ProgressSellChance" Height="8" Width="200" 
+                                                 Maximum="100" Value="0" Margin="0,10,0,0"
+                                                 Foreground="{StaticResource PrimaryColor}"/>
+                                    <TextBlock x:Name="TxtPriceAdvice" Text="💡 Avalie um item primeiro" 
+                                               Foreground="LightGray" FontSize="11" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Resultado Detalhado -->
+                    <Border Grid.Column="1" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="5,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="📋 ANÁLISE DETALHADA" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                            
+                            <TextBox Grid.Row="1" x:Name="TxtCalcResult" Style="{StaticResource DarkTextBox}"
+                                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="O resultado detalhado aparecerá aqui..."/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 4: BUILDS -->
+            <TabItem Header="📚 Builds" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Seletor de Build -->
+                    <Border Grid.Row="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                                <TextBlock Text="🎭 CLASSE:" Foreground="{StaticResource TextColor}" FontSize="11"/>
+                                <ComboBox x:Name="CmbBuildClass" Width="130" Margin="0,5,0,0">
+                                    <ComboBoxItem Content="Witch" IsSelected="True"/>
+                                    <ComboBoxItem Content="Sorceress"/>
+                                    <ComboBoxItem Content="Ranger"/>
+                                    <ComboBoxItem Content="Monk"/>
+                                    <ComboBoxItem Content="Warrior"/>
+                                    <ComboBoxItem Content="Mercenary"/>
+                                    <ComboBoxItem Content="Huntress"/>
+                                    <ComboBoxItem Content="Duelist"/>
+                                    <ComboBoxItem Content="Marauder"/>
+                                    <ComboBoxItem Content="Shadow"/>
+                                    <ComboBoxItem Content="Templar"/>
+                                    <ComboBoxItem Content="Druid"/>
+                                </ComboBox>
+                            </StackPanel>
+                            
+                            <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                                <TextBlock Text="🔍 BUSCAR BUILD (ex: Storm Mage Lich):" 
+                                           Foreground="{StaticResource TextColor}" FontSize="11"/>
+                                <TextBox x:Name="TxtBuildSearch" Style="{StaticResource DarkTextBox}" 
+                                         Width="300" Margin="0,5,0,0" Text="Storm Mage Lich"/>
+                            </StackPanel>
+                            
+                            <StackPanel Grid.Column="2" Margin="0,0,15,0">
+                                <TextBlock Text="📊 FASE:" Foreground="{StaticResource TextColor}" FontSize="11"/>
+                                <ComboBox x:Name="CmbBuildPhase" Width="120" Margin="0,5,0,0">
+                                    <ComboBoxItem Content="Leveling" IsSelected="True"/>
+                                    <ComboBoxItem Content="Early Endgame"/>
+                                    <ComboBoxItem Content="Late Endgame"/>
+                                </ComboBox>
+                            </StackPanel>
+                            
+                            <Button Grid.Column="3" Content="🔍 BUSCAR BUILD" Style="{StaticResource PrimaryButton}"
+                                    Click="BtnSearchBuild_Click" VerticalAlignment="Bottom"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Sub-tabs de Build -->
+                    <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+                        <!-- Skills -->
+                        <TabItem Header="⚡ Skills" Style="{StaticResource ModernTab}">
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Text="⚡ HABILIDADES RECOMENDADAS" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                                    
+                                    <TextBox Grid.Row="1" x:Name="TxtBuildSkills" Style="{StaticResource DarkTextBox}"
+                                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Text="Busque uma build para ver as skills recomendadas..."/>
+                                </Grid>
+                            </Border>
+                        </TabItem>
+                        
+                        <!-- Equipamentos -->
+                        <TabItem Header="🛡️ Equipamentos" Style="{StaticResource ModernTab}">
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Text="🛡️ EQUIPAMENTOS E STATS IMPORTANTES" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                                    
+                                    <TextBox Grid.Row="1" x:Name="TxtBuildGear" Style="{StaticResource DarkTextBox}"
+                                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Text="Busque uma build para ver os equipamentos recomendados..."/>
+                                </Grid>
+                            </Border>
+                        </TabItem>
+                        
+                        <!-- Passives -->
+                        <TabItem Header="🌳 Passivas" Style="{StaticResource ModernTab}">
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Text="🌳 ÁRVORE DE PASSIVAS" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                                    
+                                    <TextBox Grid.Row="1" x:Name="TxtBuildPassives" Style="{StaticResource DarkTextBox}"
+                                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Text="Busque uma build para ver as passivas recomendadas..."/>
+                                </Grid>
+                            </Border>
+                        </TabItem>
+                        
+                        <!-- Ascendancy -->
+                        <TabItem Header="⭐ Ascendancy" Style="{StaticResource ModernTab}">
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Text="⭐ ASCENDANCY" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                                    
+                                    <TextBox Grid.Row="1" x:Name="TxtBuildAscendancy" Style="{StaticResource DarkTextBox}"
+                                             IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Text="Busque uma build para ver a ascendancy recomendada..."/>
+                                </Grid>
+                            </Border>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 5: COMPARATIVO -->
+            <TabItem Header="⚖️ Comparar" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Meu Item -->
+                    <Border Grid.Column="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="0,0,5,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="📦 MEU ITEM" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,10"/>
+                            
+                            <TextBox Grid.Row="1" x:Name="TxtMyItemStats" Style="{StaticResource DarkTextBox}"
+                                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="Avalie um item para ver seus stats aqui..."/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Comparação -->
+                    <Border Grid.Column="1" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="5,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <TextBlock Grid.Row="0" Text="🔍 POR QUE OUTROS SÃO MELHORES?" FontWeight="Bold" 
+                                       Foreground="{StaticResource AccentColor}" Margin="0,0,0,5"/>
+                            
+                            <Button Grid.Row="1" Content="⚖️ ANALISAR DIFERENÇAS" Style="{StaticResource PrimaryButton}"
+                                    Click="BtnCompareItems_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                            
+                            <TextBox Grid.Row="2" x:Name="TxtComparison" Style="{StaticResource DarkTextBox}"
+                                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="Clique em 'Analisar Diferenças' para comparar seu item com os do mercado..."/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 6: HISTÓRICO -->
+            <TabItem Header="📈 Histórico" Style="{StaticResource ModernTab}">
+                <Grid Margin="10">
+                    <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                                <TextBlock Text="📈 ANÁLISE DE MERCADO" FontSize="16" FontWeight="Bold" 
+                                           Foreground="{StaticResource AccentColor}" VerticalAlignment="Center"/>
+                                <Border Background="#2a4a6a" CornerRadius="5" Padding="10,5" Margin="20,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Itens similares: " Foreground="LightGray"/>
+                                        <TextBlock x:Name="TxtSoldCount" Text="--" FontWeight="Bold" 
+                                                   Foreground="{StaticResource AccentColor}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            
+                            <Button Grid.Row="1" Content="🔄 BUSCAR HISTÓRICO" Style="{StaticResource PrimaryButton}"
+                                    Click="BtnFetchHistory_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                            
+                            <TextBox Grid.Row="2" x:Name="TxtSalesHistory" Style="{StaticResource DarkTextBox}"
+                                     IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Text="Avalie um item e clique em 'Buscar Histórico' para ver dados de mercado..."/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+            
+            <!-- TAB 7: CONFIG -->
+            <TabItem Header="⚙️ Config" Style="{StaticResource ModernTab}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Atalhos -->
+                        <Border Grid.Column="0" Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="0,0,5,0">
+                            <StackPanel>
+                                <TextBlock Text="⌨️ TECLAS DE ATALHO" FontSize="16" FontWeight="Bold" 
+                                           Foreground="{StaticResource AccentColor}" Margin="0,0,0,15"/>
+                                
+                                <TextBlock Text="Avaliar Item (Ctrl+C no jogo):" Foreground="{StaticResource TextColor}" 
+                                           FontSize="11" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtHotkey" Style="{StaticResource DarkTextBox}" Text="Alt+E" Margin="0,0,0,15"/>
+                                
+                                <TextBlock Text="Avaliação Rápida (item no chão):" Foreground="{StaticResource TextColor}" 
+                                           FontSize="11" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtHotkeyQuick" Style="{StaticResource DarkTextBox}" Text="Alt+Q" Margin="0,0,0,15"/>
+                                
+                                <TextBlock Text="Mostrar/Esconder Janela:" Foreground="{StaticResource TextColor}" 
+                                           FontSize="11" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtHotkeyToggle" Style="{StaticResource DarkTextBox}" Text="Alt+H" Margin="0,0,0,15"/>
+                                
+                                <Border Background="#2a4a6a" CornerRadius="5" Padding="10" Margin="0,0,0,15">
+                                    <TextBlock TextWrapping="Wrap" Foreground="LightGray" FontSize="11">
+                                        💡 Avaliação Rápida: Com o jogo aberto, posicione o mouse 
+                                        sobre qualquer item e pressione Alt+Q. O preço aparecerá 
+                                        automaticamente!
+                                    </TextBlock>
+                                </Border>
+                                
+                                <CheckBox x:Name="ChkAutoEvaluate" Content="Avaliar automaticamente ao colar" 
+                                          Foreground="{StaticResource TextColor}" IsChecked="True"/>
+                                <CheckBox x:Name="ChkShowPriceRange" Content="Mostrar faixa de preços" 
+                                          Foreground="{StaticResource TextColor}" IsChecked="True" Margin="0,5,0,0"/>
+                                <CheckBox x:Name="ChkTopmost" Content="Manter janela sempre visível" 
+                                          Foreground="{StaticResource TextColor}" IsChecked="True" Margin="0,5,0,0"
+                                          Checked="ChkTopmost_Changed" Unchecked="ChkTopmost_Changed"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Aparência e Taxas -->
+                        <StackPanel Grid.Column="1">
+                            <!-- Taxas -->
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="5,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="💱 TAXAS DE CONVERSÃO" FontSize="14" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,15"/>
+                                    
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="80"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="1 Divine = " 
+                                                   Foreground="{StaticResource TextColor}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtDivineRate" 
+                                                 Style="{StaticResource DarkTextBox}" Text="150"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="2" Text=" Chaos" 
+                                                   Foreground="Gray" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                                        
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="1 Exalted = " 
+                                                   Foreground="{StaticResource TextColor}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtExaltedRate" 
+                                                 Style="{StaticResource DarkTextBox}" Text="20" Margin="0,10,0,0"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text=" Chaos" 
+                                                   Foreground="Gray" VerticalAlignment="Center" Margin="5,10,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- Aparência -->
+                            <Border Background="{StaticResource CardColor}" CornerRadius="8" Padding="15" Margin="5,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="🎨 APARÊNCIA" FontSize="14" FontWeight="Bold" 
+                                               Foreground="{StaticResource AccentColor}" Margin="0,0,0,15"/>
+                                    
+                                    <TextBlock Text="Tema de Cores:" Foreground="{StaticResource TextColor}" 
+                                               FontSize="11" Margin="0,0,0,5"/>
+                                    <ComboBox x:Name="CmbTheme" Width="200" HorizontalAlignment="Left" Margin="0,0,0,15"
+                                              SelectionChanged="CmbTheme_SelectionChanged">
+                                        <ComboBoxItem Content="🌙 Escuro (Padrão)" Tag="dark" IsSelected="True"/>
+                                        <ComboBoxItem Content="🔵 Azul Noite" Tag="blue"/>
+                                        <ComboBoxItem Content="🟣 Roxo Místico" Tag="purple"/>
+                                        <ComboBoxItem Content="🟢 Verde Floresta" Tag="green"/>
+                                        <ComboBoxItem Content="🔴 Vermelho Sangue" Tag="red"/>
+                                        <ComboBoxItem Content="🟠 Laranja Fogo" Tag="orange"/>
+                                    </ComboBox>
+                                    
+                                    <TextBlock Text="Cor de Destaque:" Foreground="{StaticResource TextColor}" 
+                                               FontSize="11" Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
+                                        <Button x:Name="BtnColorGold" Content="🟡" Width="30" Height="30" Margin="0,0,5,0"
+                                                Click="BtnAccentColor_Click" Tag="#ffd700"/>
+                                        <Button x:Name="BtnColorRed" Content="🔴" Width="30" Height="30" Margin="0,0,5,0"
+                                                Click="BtnAccentColor_Click" Tag="#e94560"/>
+                                        <Button x:Name="BtnColorBlue" Content="🔵" Width="30" Height="30" Margin="0,0,5,0"
+                                                Click="BtnAccentColor_Click" Tag="#4a9fff"/>
+                                        <Button x:Name="BtnColorGreen" Content="🟢" Width="30" Height="30" Margin="0,0,5,0"
+                                                Click="BtnAccentColor_Click" Tag="#4ade80"/>
+                                        <Button x:Name="BtnColorPurple" Content="🟣" Width="30" Height="30"
+                                                Click="BtnAccentColor_Click" Tag="#a855f7"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- Botões -->
+                            <StackPanel Orientation="Horizontal" Margin="5,15,0,0">
+                                <Button Content="💾 Salvar" Style="{StaticResource PrimaryButton}" 
+                                        Click="BtnSaveConfig_Click" Margin="0,0,10,0"/>
+                                <Button Content="🔄 Resetar" Style="{StaticResource SecondaryButton}" 
+                                        Click="BtnResetConfig_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+            
+        </TabControl>
+        
+        <!-- FOOTER -->
+        <Border Grid.Row="2" Background="{StaticResource SecondaryColor}" Padding="10">
+            <Grid>
+                <TextBlock Text="💡 Dica: Use Ctrl+C no jogo sobre um item, depois Alt+E para avaliar rapidamente" 
+                           Foreground="Gray" FontSize="11" HorizontalAlignment="Center"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -1,7 +1,5 @@
 using System;
-using System.Threading;
 using System.Windows;
-using PoE2Inspector.Domain;
 using PoE2Inspector.Services.Clipboard;
 using PoE2Inspector.Services.Config;
 using PoE2Inspector.Services.EventBus;
@@ -17,153 +15,88 @@ namespace PoE2Inspector;
 
 public class AppHost
 {
-    private readonly ILogService _log;
-    private readonly IConfigService _config;
-    private readonly IEventBus _bus;
-    private readonly IGameWindowService _gameWindow;
-    private readonly HotkeyService _hotkeys;
-    private readonly IInputService _input;
-    private readonly IClipboardService _clipboard;
-    private readonly IItemParser _parser;
-    private readonly IOverlayService _overlay;
-    private readonly ITradeService _trade;
+    public ILogService Log { get; }
+    public IConfigService Config { get; }
+    public IEventBus Bus { get; }
+    public IGameWindowService GameWindow { get; }
+    public IHotkeyService Hotkeys { get; }
+    public IInputService Input { get; }
+    public IClipboardService Clipboard { get; }
+    public IItemParser Parser { get; }
+    public IOverlayService Overlay { get; }
+    public ITradeService Trade { get; }
+    
+    private MainWindow? _mainWindow;
 
-    private bool _isProcessing;
-
-    public AppHost(
-        ILogService log,
-        IConfigService config,
-        IEventBus bus,
-        IGameWindowService gameWindow,
-        HotkeyService hotkeys,
-        IInputService input,
-        IClipboardService clipboard,
-        IItemParser parser,
-        IOverlayService overlay,
-        ITradeService trade)
+    public AppHost()
     {
-        _log = log;
-        _config = config;
-        _bus = bus;
-        _gameWindow = gameWindow;
-        _hotkeys = hotkeys;
-        _input = input;
-        _clipboard = clipboard;
-        _parser = parser;
-        _overlay = overlay;
-        _trade = trade;
+        Log = new LogService();
+        Config = new ConfigService();
+        Bus = new EventBus();
+        GameWindow = new GameWindowService(Log);
+        Input = new InputService(Log);
+        Clipboard = new ClipboardService(Input, Log);
+        Parser = new ItemParser(Log);
+        Trade = new TradeService(Log);
+        Overlay = new OverlayService(Log, Trade);
+        Hotkeys = new HotkeyService(Log);
     }
 
     public void Start(Window mainWindow)
     {
-        _log.Info("=== PoE2 Inspector Starting ===");
-
-        _hotkeys.Initialize(mainWindow);
-
-        _hotkeys.HotkeyPressed += (action) =>
+        Log.Info("AppHost starting...");
+        
+        _mainWindow = mainWindow as MainWindow;
+        
+        if (Hotkeys is HotkeyService service)
         {
-            _log.Info($"Hotkey pressed event received: {action}");
-            _bus.Publish(new HotkeyEvent(action));
-        };
+            service.Initialize(mainWindow);
+        }
+        
+        Hotkeys.Register(HotkeyAction.InspectItem, System.Windows.Input.ModifierKeys.Alt, System.Windows.Input.Key.E);
+        
+        Hotkeys.HotkeyPressed += OnHotkeyPressed;
+        
+        // Don't show overlay by default - only use main window
+        // Overlay.Show();
+    }
 
-        _bus.Subscribe<HotkeyEvent>(HandleHotkey);
-        _bus.Subscribe<ItemTextCapturedEvent>(HandleItemText);
-
-        var config = _config.Load();
-        _hotkeys.Register(
-            HotkeyAction.InspectItem,
-            config.InspectItemHotkey.Modifiers,
-            config.InspectItemHotkey.Key);
-
-        _gameWindow.StartMonitoring();
-        _gameWindow.GameWindowRectChanged += rect =>
+    private async void OnHotkeyPressed(HotkeyAction action)
+    {
+        if (action == HotkeyAction.InspectItem)
         {
-            _overlay.UpdateGameRect(rect);
-        };
+            Log.Info("Hotkey pressed: InspectItem");
+            
+            var text = await Clipboard.CaptureItemTextAsync(TimeSpan.FromSeconds(1), System.Threading.CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Log.Warn("Clipboard is empty or capture failed");
+                return;
+            }
 
-        _overlay.Show();
-
-        _log.Info("AppHost started successfully");
+            var item = Parser.Parse(text);
+            if (item != null)
+            {
+                // Only update the main window - overlay was causing issues
+                if (_mainWindow != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        _mainWindow.Activate();
+                        _ = _mainWindow.EvaluateItemAsync(text);
+                    });
+                }
+            }
+        }
     }
 
     public void Stop()
     {
-        _log.Info("Stopping AppHost");
-        _gameWindow.StopMonitoring();
-        _hotkeys.UnregisterAll();
-        _overlay.Hide();
+        if (Hotkeys is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+        Overlay.Hide();
+        Log.Info("AppHost stopped.");
     }
-
-    private async void HandleHotkey(HotkeyEvent evt)
-    {
-        if (_isProcessing)
-        {
-            _log.Warn("Already processing hotkey, ignoring");
-            return;
-        }
-
-        _isProcessing = true;
-
-        try
-        {
-            _log.Info($"Hotkey triggered: {evt.Action}");
-
-            if (!_gameWindow.IsGameInForeground())
-            {
-                _log.Warn("PoE2 is not in foreground");
-                return;
-            }
-
-            var rawText = await _clipboard.CaptureItemTextAsync(
-                TimeSpan.FromSeconds(2),
-                CancellationToken.None);
-
-            if (!string.IsNullOrWhiteSpace(rawText))
-            {
-                _bus.Publish(new ItemTextCapturedEvent(rawText));
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Error("Error handling hotkey", ex);
-        }
-        finally
-        {
-            _isProcessing = false;
-        }
-    }
-
-    private void HandleItemText(ItemTextCapturedEvent evt)
-    {
-        try
-        {
-
-            var item = _parser.Parse(evt.RawText);
-
-            _bus.Publish(new ItemParsedEvent(item));
-
-            GetCursorPos(out var point);
-            var cursorPos = new Point(point.X, point.Y);
-
-            _overlay.ShowItemAtCursor(item, cursorPos);
-        }
-        catch (Exception ex)
-        {
-            _log.Error("Error handling item text", ex);
-        }
-    }
-
-    #region WinAPI
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    #endregion
 }

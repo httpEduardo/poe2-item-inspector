@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Windows;
 using PoE2Inspector.Services.Logging;
 
 namespace PoE2Inspector.Services.Input;
@@ -11,6 +12,15 @@ public class InputService : IInputService
     public InputService(ILogService log)
     {
         _log = log;
+    }
+
+    public Point GetCursorPosition()
+    {
+        if (GetCursorPos(out var point))
+        {
+            return new Point(point.X, point.Y);
+        }
+        return new Point(0, 0);
     }
 
     public void SendCtrlC()
@@ -108,6 +118,17 @@ public class InputService : IInputService
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
 
     private const int INPUT_KEYBOARD = 1;
     private const byte VK_CONTROL = 0x11;

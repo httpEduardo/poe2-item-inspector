@@ -1,6 +1,11 @@
 using System;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using PoE2Inspector.Domain;
 using PoE2Inspector.Services.Overlay;
@@ -10,342 +15,358 @@ namespace PoE2Inspector.UI;
 
 public partial class OverlayWindow : Window
 {
-    private Border? _itemCard;
     private IOverlayService? _overlayService;
     private ITradeService? _tradeService;
+    private Item? _currentItem;
+    private string _currentPrice = "";
+    private static readonly HttpClient _httpClient = new HttpClient();
 
     public OverlayWindow()
     {
         InitializeComponent();
-
-        this.MouseMove += OverlayWindow_MouseMove;
-        this.MouseLeftButtonUp += OverlayWindow_MouseLeftButtonUp;
-    }
-
-    public void SetOverlayService(IOverlayService overlayService)
-    {
-        _overlayService = overlayService;
-    }
-
-    public void SetTradeService(ITradeService tradeService)
-    {
-        _tradeService = tradeService;
-    }
-
-    public void ShowItem(Item item, Point position)
-    {
-        var canvas = this.Content as Canvas;
-        if (canvas == null) return;
-
-        if (_itemCard != null)
+        
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            canvas.Children.Remove(_itemCard);
-        }
-
-        _itemCard = CreateItemCard(item);
-
-        canvas.Children.Add(_itemCard);
-
-        _itemCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var cardWidth = Math.Min(_itemCard.DesiredSize.Width, 350);
-        var cardHeight = Math.Max(Math.Min(_itemCard.DesiredSize.Height, Height - 40), 150); 
-
-        var x = position.X + 20;
-        var y = position.Y + 20;
-
-        if (x + cardWidth > Width)
-            x = Width - cardWidth - 10;
-        if (y + cardHeight > Height)
-            y = Height - cardHeight - 10;
-
-        Canvas.SetLeft(_itemCard, x);
-        Canvas.SetTop(_itemCard, y);
-
-    }
-
-    public void HideItem()
-    {
-        var canvas = this.Content as Canvas;
-        if (_itemCard != null && canvas != null)
-        {
-            canvas.Children.Remove(_itemCard);
-            _itemCard = null;
-
-            _overlayService?.MakeOverlayClickThrough();
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("PoE2Inspector/1.0");
         }
     }
 
-    private Border CreateItemCard(Item item)
+    public void SetOverlayService(IOverlayService service)
     {
+        _overlayService = service;
+    }
 
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) }); 
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); 
+    public void SetTradeService(ITradeService service)
+    {
+        _tradeService = service;
+    }
 
-        var headerBar = new Grid
+    public async void ShowItem(Item item, Point position)
+    {
+        _currentItem = item;
+        
+        // Show loading first
+        LoadingPanel.Margin = new Thickness(position.X + 20, position.Y, 0, 0);
+        LoadingPanel.Visibility = Visibility.Visible;
+        AnalysisPanel.Visibility = Visibility.Collapsed;
+        
+        // Adjust position to not go off screen
+        double panelX = position.X + 20;
+        double panelY = position.Y;
+        
+        if (panelX + 400 > ActualWidth)
+            panelX = position.X - 420;
+        if (panelY + 500 > ActualHeight)
+            panelY = ActualHeight - 520;
+        if (panelY < 10)
+            panelY = 10;
+        
+        // Update basic info
+        TxtItemName.Text = !string.IsNullOrEmpty(item.Name) ? item.Name : item.BaseType;
+        TxtItemType.Text = item.BaseType;
+        TxtItemRarity.Text = $"Raridade: {item.Rarity}";
+        
+        // Set name color based on rarity
+        TxtItemName.Foreground = item.Rarity switch
         {
-            Background = new SolidColorBrush(Color.FromArgb(200, 40, 40, 50))
+            "Unique" => new SolidColorBrush(Color.FromRgb(175, 96, 37)),
+            "Rare" => new SolidColorBrush(Color.FromRgb(255, 255, 119)),
+            "Magic" => new SolidColorBrush(Color.FromRgb(136, 136, 255)),
+            _ => new SolidColorBrush(Color.FromRgb(200, 200, 200))
         };
-        headerBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); 
-        headerBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); 
-        headerBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); 
-        headerBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); 
-
-        var copyButton = new Button
+        
+        // Analyze mods
+        AnalyzeMods(item);
+        
+        // Calculate quality
+        var (score, description) = CalculateQuality(item);
+        TxtQualityScore.Text = score.ToString();
+        TxtQualityDesc.Text = description;
+        
+        // Set quality color
+        TxtQualityScore.Foreground = score switch
         {
-            Content = "📋",
-            FontSize = 14,
-            Background = Brushes.Transparent,
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Copy to clipboard"
+            >= 8 => new SolidColorBrush(Color.FromRgb(76, 175, 80)),   // Green
+            >= 6 => new SolidColorBrush(Color.FromRgb(255, 235, 59)),  // Yellow
+            >= 4 => new SolidColorBrush(Color.FromRgb(255, 152, 0)),   // Orange
+            _ => new SolidColorBrush(Color.FromRgb(244, 67, 54))       // Red
         };
-        copyButton.Click += (s, e) => CopyItemToClipboard(item);
-        Grid.SetColumn(copyButton, 0);
-        headerBar.Children.Add(copyButton);
+        
+        // Generate verdict
+        GenerateVerdict(item, score);
+        
+        // Position and show panel
+        AnalysisPanel.Margin = new Thickness(panelX, panelY, 0, 0);
+        
+        // Get price estimate (async)
+        await GetPriceEstimateAsync(item);
+        
+        // Hide loading, show analysis
+        LoadingPanel.Visibility = Visibility.Collapsed;
+        AnalysisPanel.Visibility = Visibility.Visible;
+    }
 
-        var tradeButton = new Button
+    private void AnalyzeMods(Item item)
+    {
+        var sb = new StringBuilder();
+        
+        if (item.ImplicitMods.Any())
         {
-            Content = "🔍",
-            FontSize = 14,
-            Background = Brushes.Transparent,
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Search on PoE2 Trade"
-        };
-        tradeButton.Click += (s, e) => SearchItemOnTrade(item);
-        Grid.SetColumn(tradeButton, 1);
-        headerBar.Children.Add(tradeButton);
-
-        var dragHandle = new Border
-        {
-            Background = Brushes.Transparent,
-            Cursor = System.Windows.Input.Cursors.SizeAll
-        };
-        dragHandle.MouseLeftButtonDown += (s, e) => StartDrag(e);
-        Grid.SetColumn(dragHandle, 2);
-        headerBar.Children.Add(dragHandle);
-
-        var closeButton = new Button
-        {
-            Content = "✕",
-            FontSize = 16,
-            Background = Brushes.Transparent,
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Close"
-        };
-        closeButton.Click += (s, e) => HideItem();
-        Grid.SetColumn(closeButton, 3);
-        headerBar.Children.Add(closeButton);
-
-        Grid.SetRow(headerBar, 0);
-        grid.Children.Add(headerBar);
-
-        var stackPanel = new StackPanel
-        {
-            Margin = new Thickness(10)
-        };
-
-        AddTextBlock(stackPanel, item.Rarity, GetRarityColor(item.Rarity), 14, true);
-        AddTextBlock(stackPanel, item.Name, Colors.White, 16, true);
-        if (!string.IsNullOrEmpty(item.BaseType))
-        {
-            AddTextBlock(stackPanel, item.BaseType, Colors.LightGray, 14);
-        }
-
-        AddSeparator(stackPanel);
-
-        if (item.Properties.Count > 0)
-        {
-            foreach (var prop in item.Properties)
-            {
-                var displayValue = prop.Value;
-
-                if (prop.Label.Equals("Sockets", StringComparison.OrdinalIgnoreCase))
-                {
-
-                    var socketCount = System.Linq.Enumerable.Count(displayValue, c => !char.IsWhiteSpace(c) && c != '-');
-                    displayValue = socketCount.ToString();
-                }
-
-                AddTextBlock(stackPanel, $"{prop.Label}: {displayValue}", Colors.LightBlue, 12);
-            }
-            AddSeparator(stackPanel);
-        }
-
-        if (item.Requirements.Count > 0)
-        {
-            AddTextBlock(stackPanel, "Requirements:", Colors.White, 12, true);
-            foreach (var req in item.Requirements)
-            {
-                AddTextBlock(stackPanel, $"{req.Label}: {req.Value}", Colors.LightGray, 11);
-            }
-            AddSeparator(stackPanel);
-        }
-
-        if (item.ImplicitMods.Count > 0)
-        {
+            sb.AppendLine("📌 Implícitos:");
             foreach (var mod in item.ImplicitMods)
             {
-                AddTextBlock(stackPanel, mod.RawText, Colors.LightBlue, 12);
+                sb.AppendLine($"  • {mod.RawText}");
             }
-            AddSeparator(stackPanel);
         }
-
-        if (item.ExplicitMods.Count > 0)
+        
+        if (item.ExplicitMods.Any())
         {
+            if (sb.Length > 0) sb.AppendLine();
+            sb.AppendLine("🔹 Explícitos:");
             foreach (var mod in item.ExplicitMods)
             {
-                AddTextBlock(stackPanel, mod.RawText, Colors.LightSkyBlue, 12);
+                var tier = GetModTierEmoji(mod.RawText);
+                sb.AppendLine($"  {tier} {mod.RawText}");
             }
         }
-
-        Grid.SetRow(stackPanel, 1);
-        grid.Children.Add(stackPanel);
-
-        var border = new Border
+        
+        if (!item.ImplicitMods.Any() && !item.ExplicitMods.Any())
         {
-            Background = new SolidColorBrush(Color.FromArgb(230, 20, 20, 30)),
-            BorderBrush = new SolidColorBrush(GetRarityColor(item.Rarity)),
-            BorderThickness = new Thickness(2),
-            CornerRadius = new CornerRadius(5),
-            Child = grid,
-            MinWidth = 300,
-            MaxWidth = 350,
-            MinHeight = 150
-
-        };
-
-        return border;
-    }
-
-    private Point _dragStartPoint;
-    private bool _isDragging;
-
-    private void StartDrag(System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (_itemCard != null)
-        {
-            _isDragging = true;
-            var canvas = this.Content as Canvas;
-            if (canvas != null)
-            {
-                _dragStartPoint = e.GetPosition(canvas);
-                _itemCard.CaptureMouse();
-            }
+            sb.AppendLine("Nenhum mod identificado.");
+            sb.AppendLine("Item base ou currency.");
         }
+        
+        TxtModsAnalysis.Text = sb.ToString();
     }
 
-    private void OverlayWindow_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    private string GetModTierEmoji(string modText)
     {
-        if (_isDragging && _itemCard != null)
+        var text = modText.ToLower();
+        var value = ExtractNumericValue(modText);
+        
+        if (text.Contains("life") || text.Contains("vida"))
         {
-            var canvas = this.Content as Canvas;
-            if (canvas != null)
-            {
-                var currentPoint = e.GetPosition(canvas);
-                var offset = currentPoint - _dragStartPoint;
-
-                var currentLeft = Canvas.GetLeft(_itemCard);
-                var currentTop = Canvas.GetTop(_itemCard);
-
-                if (double.IsNaN(currentLeft)) currentLeft = 0;
-                if (double.IsNaN(currentTop)) currentTop = 0;
-
-                Canvas.SetLeft(_itemCard, currentLeft + offset.X);
-                Canvas.SetTop(_itemCard, currentTop + offset.Y);
-
-                _dragStartPoint = currentPoint;
-            }
+            if (value >= 80) return "🟢";
+            if (value >= 60) return "🟡";
+            if (value >= 40) return "🟠";
+            return "🔴";
         }
+        
+        if (text.Contains("resist"))
+        {
+            if (value >= 40) return "🟢";
+            if (value >= 30) return "🟡";
+            if (value >= 20) return "🟠";
+            return "🔴";
+        }
+        
+        if (text.Contains("damage") || text.Contains("dano"))
+        {
+            if (value >= 100) return "🟢";
+            if (value >= 60) return "🟡";
+            if (value >= 30) return "🟠";
+            return "🔴";
+        }
+        
+        return "⚪";
     }
 
-    private void OverlayWindow_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private double ExtractNumericValue(string text)
     {
-        if (_isDragging && _itemCard != null)
-        {
-            _isDragging = false;
-            _itemCard.ReleaseMouseCapture();
-        }
+        var match = Regex.Match(text, @"[\+\-]?(\d+(?:\.\d+)?)");
+        if (match.Success && double.TryParse(match.Groups[1].Value, out double val))
+            return val;
+        return 0;
     }
 
-    private void CopyItemToClipboard(Item item)
+    private (int score, string description) CalculateQuality(Item item)
+    {
+        int score = 5;
+        var reasons = new System.Collections.Generic.List<string>();
+        
+        // Rarity bonus
+        if (item.Rarity == "Unique")
+        {
+            score += 2;
+            reasons.Add("Único");
+        }
+        else if (item.Rarity == "Rare")
+        {
+            score += 1;
+            reasons.Add("Raro");
+        }
+        
+        // Mod count
+        int modCount = item.ExplicitMods.Count + item.ImplicitMods.Count;
+        if (modCount >= 6)
+        {
+            score += 2;
+            reasons.Add($"{modCount} mods");
+        }
+        else if (modCount >= 4)
+        {
+            score += 1;
+            reasons.Add($"{modCount} mods");
+        }
+        
+        // Item level
+        if (item.ItemLevel >= 83)
+        {
+            score += 1;
+            reasons.Add($"iLvl {item.ItemLevel}");
+        }
+        
+        // Cap at 10
+        score = Math.Min(10, Math.Max(0, score));
+        
+        return (score, string.Join(" | ", reasons));
+    }
+
+    private void GenerateVerdict(Item item, int qualityScore)
+    {
+        string verdict;
+        string bgColor;
+        
+        if (qualityScore >= 8)
+        {
+            verdict = "🌟 EXCELENTE! Item muito valioso, vale a pena manter ou vender por bom preço.";
+            bgColor = "#1A4D1A"; // Green
+        }
+        else if (qualityScore >= 6)
+        {
+            verdict = "👍 BOM item. Pode valer algo no trade, verifique o preço.";
+            bgColor = "#4D4D1A"; // Yellow-ish
+        }
+        else if (qualityScore >= 4)
+        {
+            verdict = "😐 MÉDIO. Pode ter algum valor para builds específicas.";
+            bgColor = "#4D3A1A"; // Orange-ish
+        }
+        else
+        {
+            verdict = "👎 FRACO. Provavelmente não vale vender, considere usar para craft.";
+            bgColor = "#4D1A1A"; // Red
+        }
+        
+        TxtVerdict.Text = verdict;
+        VerdictBorder.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(bgColor));
+    }
+
+    private async Task GetPriceEstimateAsync(Item item)
     {
         try
         {
-            var text = $"{item.Name}\n{item.BaseType}\n\n";
-
-            foreach (var prop in item.Properties)
-                text += $"{prop.Label}: {prop.Value}\n";
-
-            if (item.Requirements.Count > 0)
+            TxtPrice.Text = "Buscando...";
+            TxtPriceInfo.Text = "Consultando trade API...";
+            
+            var league = "Standard"; // TODO: Make configurable
+            var searchUrl = $"https://www.pathofexile.com/api/trade2/search/poe2/{league}";
+            
+            // Build search query
+            var query = new
             {
-                text += "\nRequirements:\n";
-                foreach (var req in item.Requirements)
-                    text += $"{req.Label}: {req.Value}\n";
-            }
-
-            if (item.ImplicitMods.Count > 0)
+                query = new
+                {
+                    status = new { option = "online" },
+                    type = item.BaseType,
+                    stats = new[] { new { type = "and", filters = Array.Empty<object>() } }
+                },
+                sort = new { price = "asc" }
+            };
+            
+            var json = JsonSerializer.Serialize(query);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            var response = await _httpClient.PostAsync(searchUrl, content);
+            
+            if (response.IsSuccessStatusCode)
             {
-                text += "\n";
-                foreach (var mod in item.ImplicitMods)
-                    text += $"{mod.RawText}\n";
+                var responseJson = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(responseJson);
+                var root = doc.RootElement;
+                
+                if (root.TryGetProperty("result", out var results) && results.GetArrayLength() > 0)
+                {
+                    var resultCount = results.GetArrayLength();
+                    
+                    // Fetch first few results for price
+                    var fetchIds = results.EnumerateArray().Take(5).Select(r => r.GetString()).ToArray();
+                    var fetchUrl = $"https://www.pathofexile.com/api/trade2/fetch/{string.Join(",", fetchIds)}?query={root.GetProperty("id").GetString()}";
+                    
+                    await Task.Delay(500); // Rate limiting
+                    var fetchResponse = await _httpClient.GetAsync(fetchUrl);
+                    
+                    if (fetchResponse.IsSuccessStatusCode)
+                    {
+                        var fetchJson = await fetchResponse.Content.ReadAsStringAsync();
+                        using var fetchDoc = JsonDocument.Parse(fetchJson);
+                        
+                        var prices = new System.Collections.Generic.List<string>();
+                        foreach (var result in fetchDoc.RootElement.GetProperty("result").EnumerateArray())
+                        {
+                            if (result.TryGetProperty("listing", out var listing) &&
+                                listing.TryGetProperty("price", out var price))
+                            {
+                                var amount = price.GetProperty("amount").GetDouble();
+                                var currency = price.GetProperty("currency").GetString();
+                                prices.Add($"{amount} {currency}");
+                            }
+                        }
+                        
+                        if (prices.Any())
+                        {
+                            _currentPrice = prices.First();
+                            TxtPrice.Text = _currentPrice;
+                            TxtPriceInfo.Text = $"Baseado em {resultCount} listagens";
+                            return;
+                        }
+                    }
+                }
+                
+                TxtPrice.Text = "Sem listagens";
+                TxtPriceInfo.Text = "Nenhum item similar encontrado";
             }
-
-            if (item.ExplicitMods.Count > 0)
+            else
             {
-                text += "\n";
-                foreach (var mod in item.ExplicitMods)
-                    text += $"{mod.RawText}\n";
+                TxtPrice.Text = "Erro na API";
+                TxtPriceInfo.Text = $"Status: {response.StatusCode}";
             }
-
-            System.Windows.Clipboard.SetText(text);
         }
-        catch { }
-    }
-
-    private void SearchItemOnTrade(Item item)
-    {
-        _tradeService?.OpenTradeSearch(item);
-    }
-
-    private void AddTextBlock(StackPanel parent, string text, Color color, double fontSize, bool bold = false)
-    {
-        parent.Children.Add(new TextBlock
+        catch (Exception ex)
         {
-            Text = text,
-            Foreground = new SolidColorBrush(color),
-            FontSize = fontSize,
-            FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 2)
-        });
+            TxtPrice.Text = "Erro";
+            TxtPriceInfo.Text = ex.Message.Length > 40 ? ex.Message.Substring(0, 40) + "..." : ex.Message;
+        }
     }
 
-    private void AddSeparator(StackPanel parent)
+    public void HidePanel()
     {
-        parent.Children.Add(new Border
-        {
-            Height = 1,
-            Background = new SolidColorBrush(Color.FromArgb(100, 150, 150, 150)),
-            Margin = new Thickness(0, 5, 0, 5)
-        });
+        AnalysisPanel.Visibility = Visibility.Collapsed;
+        LoadingPanel.Visibility = Visibility.Collapsed;
     }
 
-    private Color GetRarityColor(string rarity)
+    private void BtnOpenTrade_Click(object sender, RoutedEventArgs e)
     {
-        return rarity.ToLower() switch
+        if (_currentItem != null && _tradeService != null)
         {
-            "normal" => Colors.White,
-            "magic" => Color.FromRgb(136, 136, 255),
-            "rare" => Color.FromRgb(255, 255, 119),
-            "unique" => Color.FromRgb(175, 96, 37),
-            "currency" => Colors.Gold,
-            _ => Colors.Gray
-        };
+            _tradeService.OpenTradeSearch(_currentItem);
+        }
+    }
+
+    private void BtnCopyPrice_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_currentPrice))
+        {
+            try
+            {
+                Clipboard.SetText(_currentPrice);
+            }
+            catch { }
+        }
+    }
+
+    private void BtnClose_Click(object sender, RoutedEventArgs e)
+    {
+        HidePanel();
     }
 }

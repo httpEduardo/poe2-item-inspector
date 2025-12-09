@@ -11,6 +11,15 @@ public class AppConfig
     };
 
     public int ClipboardTimeoutMs { get; set; } = 2000;
+    
+    // UI Settings
+    public string HotkeyText { get; set; } = "Alt+E";
+    public bool AutoEvaluate { get; set; } = true;
+    public bool ShowPriceRange { get; set; } = true;
+    
+    // Currency Rates (in chaos orbs)
+    public decimal DivineRate { get; set; } = 150m;
+    public decimal ExaltedRate { get; set; } = 20m;
 }
 
 public class HotkeyConfig
@@ -24,3 +33,4 @@ public class HotkeyConfig
         Key = Key.None;
     }
 }
+
